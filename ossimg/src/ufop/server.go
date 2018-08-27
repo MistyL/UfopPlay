@@ -217,7 +217,14 @@ func writeOctetResultFromUrl(w http.ResponseWriter, result interface{}) {
 		resUrl = v
 	}
 
-	resp, respErr := http.Get(resUrl)
+	// resp, respErr := http.Get(resUrl)
+	req, reqErr := http.NewRequest("GET", resUrl, nil)
+	if reqErr != nil {
+		log.Error("new request error", reqErr)
+		return
+	}
+	req.Host = "image.tuhu.cn"
+	resp, respErr := http.DefaultClient.Do(req)
 	if respErr != nil {
 		log.Error("get remote resource error", respErr)
 		return

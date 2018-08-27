@@ -286,11 +286,6 @@ func (this *OSSImager) Do(req ufop.UfopRequest, ufopBody io.ReadCloser) (result 
 		return
 	}
 
-	/*if cdnDomain == "" {
-		err = errors.New("invalid cdn domain")
-		return
-	}*/
-
 	srcUrl := fmt.Sprintf("%s%s", srcDomain, path)
 	qiniuUrl := srcUrl
 
@@ -298,11 +293,10 @@ func (this *OSSImager) Do(req ufop.UfopRequest, ufopBody io.ReadCloser) (result 
 		var fop string
 		switch oper.Name {
 		case OSS_OPER_IMAGE:
-			fop = this.formatQiniuImageFop(oper, srcDomain, path)
+			fop, err = this.formatQiniuImageFop(oper, srcDomain, path)
 		case OSS_OPER_WATERMARK:
-			fop = this.formatQiniuWatermarkFop(oper, srcDomain)
+			fop, err = this.formatQiniuWatermarkFop(oper, srcDomain)
 		}
-
 		if fop != "" {
 			if strings.Contains(qiniuUrl, "?") {
 				qiniuUrl = fmt.Sprintf("%s|%s", qiniuUrl, fop)
@@ -316,9 +310,6 @@ func (this *OSSImager) Do(req ufop.UfopRequest, ufopBody io.ReadCloser) (result 
 	log.Infof("[%s] %s", req.ReqId, qiniuUrl)
 	resultType = ufop.RESULT_TYPE_OCTET_URL
 
-	//for debug
-	//result = []byte(qiniuUrl)
-	//resultType = ufop.RESULT_TYPE_OCTECT_BYTES
 	return
 }
 
@@ -564,16 +555,29 @@ get image width or height
 func (this *OSSImager) getImageInfo(imageUrl string) (imageInfo *ImageInfo, err error) {
 	imageInfoUrl := fmt.Sprintf("%s?imageInfo", imageUrl)
 	log.Debug(imageInfoUrl)
-	resp, respErr := http.Get(imageInfoUrl)
+	// resp, respErr := http.Get(imageInfoUrl)
+	req, reqErr := http.NewRequest("GET", imageInfoUrl, nil)
+	if reqErr != nil {
+		err = reqErr
+		return
+	}
+	req.Host = "image.tuhu.cn"
+	resp, respErr := http.DefaultClient.Do(req)
 	if respErr != nil {
 		err = respErr
 		return
 	}
 	defer resp.Body.Close()
+
+	statusCode := resp.StatusCode
 	buffer := bytes.NewBuffer(nil)
 	_, cpErr := io.Copy(buffer, resp.Body)
 	if cpErr != nil {
 		err = cpErr
+		return
+	}
+	if statusCode > 299 {
+		err = errors.New(fmt.Sprintf("get image info error, statuscode is %d", statusCode))
 		return
 	}
 	imageInfo = &ImageInfo{}
@@ -585,12 +589,13 @@ func (this *OSSImager) getImageInfo(imageUrl string) (imageInfo *ImageInfo, err 
 	return
 }
 
-func (this *OSSImager) formatQiniuImageFop(oper OSSImageOperation, srcDomain string, path string) (qFop string) {
+func (this *OSSImager) formatQiniuImageFop(oper OSSImageOperation, srcDomain, path string) (qFop string, err error) {
 	srcUrl := fmt.Sprintf("%s%s", srcDomain, path)
 
 	imageInfo, gErr := this.getImageInfo(srcUrl)
 	if gErr != nil {
-		log.Error("get image info error", gErr.Error())
+		log.Error("get image info error", gErr)
+		err = gErr
 		return
 	}
 
@@ -692,11 +697,19 @@ func (this *OSSImager) formatQiniuImageFop(oper OSSImageOperation, srcDomain str
 	}
 
 	if oper.RelQuality != 0 {
-		qFop = fmt.Sprintf("%s/quality/%d", qFop, oper.RelQuality)
+		if oper.RelQuality > 90 {
+			qFop = fmt.Sprintf("%s/quality/%d", qFop, 90)
+		} else {
+			qFop = fmt.Sprintf("%s/quality/%d", qFop, oper.RelQuality)
+		}
 	}
 
 	if oper.Quality != 0 {
-		qFop = fmt.Sprintf("%s/quality/%d", qFop, oper.Quality)
+		if oper.Quality > 90 {
+			qFop = fmt.Sprintf("%s/quality/%d", qFop, 90)
+		} else {
+			qFop = fmt.Sprintf("%s/quality/%d", qFop, oper.Quality)
+		}
 	}
 
 	if oper.Interlace == 1 {
@@ -761,10 +774,10 @@ func (this *OSSImager) formatQiniuImageFop(oper OSSImageOperation, srcDomain str
 		}
 	}
 
-	return
+	return qFop, nil
 }
 
-func (this *OSSImager) formatQiniuWatermarkFop(oper OSSImageOperation, srcDomain string) (qFop string) {
+func (this *OSSImager) formatQiniuWatermarkFop(oper OSSImageOperation, srcDomain string) (qFop string, err error) {
 	switch oper.WMType {
 	case OSS_WM_IMAGE:
 		qFop = "watermark/1"
@@ -850,5 +863,5 @@ func (this *OSSImager) formatQiniuWatermarkFop(oper OSSImageOperation, srcDomain
 		}
 	}
 
-	return
+	return qFop, nil
 }
