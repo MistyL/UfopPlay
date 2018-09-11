@@ -91,8 +91,11 @@ func (this *UfopServer) serveUfop(w http.ResponseWriter, req *http.Request) {
 	reqId := utils.NewRequestId()
 	ufopReq.ReqId = reqId
 
-	ufopReqStr, _ := json.Marshal(&ufopReq)
-	log.Infof("[%s] %s", reqId, string(ufopReqStr))
+	_, jsonErr := json.Marshal(&ufopReq)
+	// log.Infof("[%s] %s", reqId, string(ufopReqStr))
+	if jsonErr != nil {
+		log.Errorf("[%s] %s", reqId, jsonErr.Error())
+	}
 
 	ufopResult, ufopResultType, ufopResultContentType, err =
 		handleJob(ufopReq, req.Body, this.cfg.UfopPrefix, this.jobHandlers)

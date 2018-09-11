@@ -307,7 +307,7 @@ func (this *OSSImager) Do(req ufop.UfopRequest, ufopBody io.ReadCloser) (result 
 	}
 
 	result = qiniuUrl
-	log.Infof("[%s] %s", req.ReqId, qiniuUrl)
+	// log.Infof("[%s] %s", req.ReqId, qiniuUrl)
 	resultType = ufop.RESULT_TYPE_OCTET_URL
 
 	return
